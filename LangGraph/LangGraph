@@ -1,0 +1,1033 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "8ad8eba8",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "415a78a1",
+   "metadata": {},
+   "source": [
+    "> https://docs.langchain.com/oss/python/langgraph/use-graph-api"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "317277ea",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "adb72161",
+   "metadata": {},
+   "source": [
+    "# Define and Update States"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "1aa22a81",
+   "metadata": {},
+   "source": [
+    "## Use Pydantic models for graph state"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "4f44d698",
+   "metadata": {},
+   "source": [
+    "Known Limitations\n",
+    "- Currently, the output of the graph will **NOT** be an instance of a pydantic model.\n",
+    "- Run-time validation only occurs on inputs to the first node in the graph, not on subsequent nodes or outputs.\n",
+    "- The validation error trace from pydantic does not show which node the error arises in.\n",
+    "- Pydantic’s recursive validation can be slow. For performance-sensitive applications, you may want to consider using a `dataclass` instead."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "ed0c5bbe",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "4e34deb3",
+   "metadata": {},
+   "source": [
+    "# Add Runtime Configuration"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "c1d02a33",
+   "metadata": {},
+   "source": [
+    "Sometimes you want to be able to configure your graph when calling it. For example, you might want to be able to specify what LLM or system prompt to use at runtime, without polluting the graph state with these parameters."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "e32e838c",
+   "metadata": {},
+   "source": [
+    "To add runtime configuration:\n",
+    "1. Specify a schema for your configuration\n",
+    "2. Add the configuration to the function signature for nodes or conditional edges\n",
+    "3. Pass the configuration into the graph."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "eed2e55e",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'my_state_value': 1}\n",
+      "{'my_state_value': 2}\n"
+     ]
+    }
+   ],
+   "source": [
+    "from langgraph.graph import END, StateGraph, START\n",
+    "from langgraph.runtime import Runtime\n",
+    "from typing_extensions import TypedDict\n",
+    "\n",
+    "# 1. Specify config schema\n",
+    "class ContextSchema(TypedDict):\n",
+    "    my_runtime_value: str\n",
+    "\n",
+    "# 2. Define a graph that accesses the config in a node\n",
+    "class State(TypedDict):\n",
+    "    my_state_value: str\n",
+    "\n",
+    "def node(state: State, runtime: Runtime[ContextSchema]):  \n",
+    "    if runtime.context[\"my_runtime_value\"] == \"a\":  \n",
+    "        return {\"my_state_value\": 1}\n",
+    "    elif runtime.context[\"my_runtime_value\"] == \"b\":  \n",
+    "        return {\"my_state_value\": 2}\n",
+    "    else:\n",
+    "        raise ValueError(\"Unknown values.\")\n",
+    "\n",
+    "builder = StateGraph(State, context_schema=ContextSchema)  \n",
+    "builder.add_node(node)\n",
+    "builder.add_edge(START, \"node\")\n",
+    "builder.add_edge(\"node\", END)\n",
+    "\n",
+    "graph = builder.compile()\n",
+    "\n",
+    "# 3. Pass in configuration at runtime:\n",
+    "print(graph.invoke({}, context={\"my_runtime_value\": \"a\"}))  \n",
+    "print(graph.invoke({}, context={\"my_runtime_value\": \"b\"}))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "2a6e441c",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "545e28fb",
+   "metadata": {},
+   "source": [
+    "# Add Retry Policies"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "d5e961fa",
+   "metadata": {},
+   "source": [
+    "To configure a retry policy, pass the `retry_policy` parameter to the `add_node`. The `retry_policy` parameter takes in a `RetryPolicy` named tuple object. Below we instantiate a `RetryPolicy` object with the default parameters and associate it with a node:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "7277d89d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from langgraph.types import RetryPolicy\n",
+    "\n",
+    "# builder.add_node(\n",
+    "#     \"node_name\",\n",
+    "#     node_function,\n",
+    "#     retry_policy=RetryPolicy(),\n",
+    "# )"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "f81e9c59",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "77ce9312",
+   "metadata": {},
+   "source": [
+    "# Add Node Caching"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "b7ec5397",
+   "metadata": {},
+   "source": [
+    "To configure a cache policy, pass the `cache_policy` parameter to the `add_node` function. In the following example, a `CachePolicy` object is instantiated with a time to live of 120 seconds and the default `key_func` generator. Then it is associated with a node:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "8376ef73",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from langgraph.types import CachePolicy\n",
+    "\n",
+    "# builder.add_node(\n",
+    "#     \"node_name\",\n",
+    "#     node_function,\n",
+    "#     cache_policy=CachePolicy(ttl=120),\n",
+    "# )"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "2d2723cd",
+   "metadata": {},
+   "source": [
+    "Then, to enable node-level caching for a graph, set the `cache` argument when compiling the graph. The example below uses `InMemoryCache` to set up a graph with in-memory cache, but `SqliteCache` is also available."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "91af9fb7",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from langgraph.cache.memory import InMemoryCache\n",
+    "\n",
+    "# graph = builder.compile(cache=InMemoryCache())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "17a5842f",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "88b14095",
+   "metadata": {},
+   "source": [
+    "# Create a Sequence of Steps"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "ba5c2ea0",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# builder = StateGraph(State).add_sequence([step_1, step_2, step_3])\n",
+    "# builder.add_edge(START, \"step_1\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "33e1c7c2",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "020efaf0",
+   "metadata": {},
+   "source": [
+    "# Create Branches"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "8c412afd",
+   "metadata": {},
+   "source": [
+    "## Run graph nodes in parallel"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "dd43ca3b",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import operator\n",
+    "from typing import Annotated, Any\n",
+    "from typing_extensions import TypedDict\n",
+    "from langgraph.graph import StateGraph, START, END\n",
+    "\n",
+    "class State(TypedDict):\n",
+    "    # The operator.add reducer fn makes this append-only\n",
+    "    aggregate: Annotated[list, operator.add]\n",
+    "\n",
+    "def a(state: State):\n",
+    "    print(f'Adding \"A\" to {state[\"aggregate\"]}')\n",
+    "    return {\"aggregate\": [\"A\"]}\n",
+    "\n",
+    "def b(state: State):\n",
+    "    print(f'Adding \"B\" to {state[\"aggregate\"]}')\n",
+    "    return {\"aggregate\": [\"B\"]}\n",
+    "\n",
+    "def c(state: State):\n",
+    "    print(f'Adding \"C\" to {state[\"aggregate\"]}')\n",
+    "    return {\"aggregate\": [\"C\"]}\n",
+    "\n",
+    "def d(state: State):\n",
+    "    print(f'Adding \"D\" to {state[\"aggregate\"]}')\n",
+    "    return {\"aggregate\": [\"D\"]}\n",
+    "\n",
+    "builder = StateGraph(State)\n",
+    "builder.add_node(a)\n",
+    "builder.add_node(b)\n",
+    "builder.add_node(c)\n",
+    "builder.add_node(d)\n",
+    "builder.add_edge(START, \"a\")\n",
+    "builder.add_edge(\"a\", \"b\")\n",
+    "builder.add_edge(\"a\", \"c\")\n",
+    "builder.add_edge(\"b\", \"d\")\n",
+    "builder.add_edge(\"c\", \"d\")\n",
+    "builder.add_edge(\"d\", END)\n",
+    "graph = builder.compile()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "2050458a",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Adding \"A\" to []\n",
+      "Adding \"B\" to ['A']\n",
+      "Adding \"C\" to ['A']\n",
+      "Adding \"D\" to ['A', 'B', 'C']\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "{'aggregate': ['A', 'B', 'C', 'D']}"
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "graph.invoke({\"aggregate\": []}, {\"configurable\": {\"thread_id\": \"foo\"}})"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "a230fc08",
+   "metadata": {},
+   "source": [
+    "In the above example, nodes \"b\" and \"c\" are executed concurrently in the same superstep. Because they are in the same step, node \"d\" executes after both \"b\" and \"c\" are finished."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "c32c989c",
+   "metadata": {},
+   "source": [
+    "Importantly, updates from a parallel superstep may not be ordered consistently. If you need a consistent, predetermined ordering of updates from a parallel superstep, you should write the outputs to a separate field in the state together with a value with which to order them."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "716d4977",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "601b6b8e",
+   "metadata": {},
+   "source": [
+    "## Defer Node Execution"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "9bde502c",
+   "metadata": {},
+   "source": [
+    "Deferring node execution is useful when you want to delay the execution of a node until all other pending tasks are completed. This is particularly relevant when branches have different lengths, which is common in workflows like map-reduce flows."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "id": "56ea98c5",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import operator\n",
+    "from typing import Annotated, Any\n",
+    "from typing_extensions import TypedDict\n",
+    "from langgraph.graph import StateGraph, START, END\n",
+    "\n",
+    "class State(TypedDict):\n",
+    "    # The operator.add reducer fn makes this append-only\n",
+    "    aggregate: Annotated[list, operator.add]\n",
+    "\n",
+    "def a(state: State):\n",
+    "    print(f'Adding \"A\" to {state[\"aggregate\"]}')\n",
+    "    return {\"aggregate\": [\"A\"]}\n",
+    "\n",
+    "def b(state: State):\n",
+    "    print(f'Adding \"B\" to {state[\"aggregate\"]}')\n",
+    "    return {\"aggregate\": [\"B\"]}\n",
+    "\n",
+    "def b_2(state: State):\n",
+    "    print(f'Adding \"B_2\" to {state[\"aggregate\"]}')\n",
+    "    return {\"aggregate\": [\"B_2\"]}\n",
+    "\n",
+    "def c(state: State):\n",
+    "    print(f'Adding \"C\" to {state[\"aggregate\"]}')\n",
+    "    return {\"aggregate\": [\"C\"]}\n",
+    "\n",
+    "def d(state: State):\n",
+    "    print(f'Adding \"D\" to {state[\"aggregate\"]}')\n",
+    "    return {\"aggregate\": [\"D\"]}\n",
+    "\n",
+    "builder = StateGraph(State)\n",
+    "builder.add_node(a)\n",
+    "builder.add_node(b)\n",
+    "builder.add_node(b_2)\n",
+    "builder.add_node(c)\n",
+    "builder.add_node(d, defer=True)  \n",
+    "builder.add_edge(START, \"a\")\n",
+    "builder.add_edge(\"a\", \"b\")\n",
+    "builder.add_edge(\"a\", \"c\")\n",
+    "builder.add_edge(\"b\", \"b_2\")\n",
+    "builder.add_edge(\"b_2\", \"d\")\n",
+    "builder.add_edge(\"c\", \"d\")\n",
+    "builder.add_edge(\"d\", END)\n",
+    "graph = builder.compile()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "id": "d4543e52",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "'\\nAdding \"A\" to []\\nAdding \"B\" to [\\'A\\']\\nAdding \"C\" to [\\'A\\']\\nAdding \"B_2\" to [\\'A\\', \\'B\\', \\'C\\']\\nAdding \"D\" to [\\'A\\', \\'B\\', \\'C\\']\\nAdding \"D\" to [\\'A\\', \\'B\\', \\'C\\', \\'B_2\\', \\'D\\']\\n\\n{\\'aggregate\\': [\\'A\\', \\'B\\', \\'C\\', \\'B_2\\', \\'D\\', \\'D\\']}\\n'"
+      ]
+     },
+     "execution_count": 15,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# without defer=True\n",
+    "# graph.invoke({\"aggregate\": []})\n",
+    "\n",
+    "\"\"\"\n",
+    "Adding \"A\" to []\n",
+    "Adding \"B\" to ['A']\n",
+    "Adding \"C\" to ['A']\n",
+    "Adding \"B_2\" to ['A', 'B', 'C']\n",
+    "Adding \"D\" to ['A', 'B', 'C']\n",
+    "Adding \"D\" to ['A', 'B', 'C', 'B_2', 'D']\n",
+    "\n",
+    "{'aggregate': ['A', 'B', 'C', 'B_2', 'D', 'D']}\n",
+    "\"\"\""
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "id": "68042190",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Adding \"A\" to []\n",
+      "Adding \"B\" to ['A']\n",
+      "Adding \"C\" to ['A']\n",
+      "Adding \"B_2\" to ['A', 'B', 'C']\n",
+      "Adding \"D\" to ['A', 'B', 'C', 'B_2']\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "{'aggregate': ['A', 'B', 'C', 'B_2', 'D']}"
+      ]
+     },
+     "execution_count": 17,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "graph.invoke({\"aggregate\": []})"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "fac4a3da",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "ba977384",
+   "metadata": {},
+   "source": [
+    "## Conditional Branching"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "00e3d277",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "71c9f141",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "2568983e",
+   "metadata": {},
+   "source": [
+    "# Map-Reduce and the Send API"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "id": "8f8aac6f",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from langgraph.graph import StateGraph, START, END\n",
+    "from langgraph.types import Send\n",
+    "from typing_extensions import TypedDict, Annotated\n",
+    "import operator\n",
+    "\n",
+    "class OverallState(TypedDict):\n",
+    "    topic: str\n",
+    "    subjects: list[str]\n",
+    "    jokes: Annotated[list[str], operator.add]\n",
+    "    best_selected_joke: str\n",
+    "\n",
+    "def generate_topics(state: OverallState):\n",
+    "    return {\"subjects\": [\"lions\", \"elephants\", \"penguins\"]}\n",
+    "\n",
+    "def generate_joke(state: OverallState):\n",
+    "    joke_map = {\n",
+    "        \"lions\": \"Why don't lions like fast food? Because they can't catch it!\",\n",
+    "        \"elephants\": \"Why don't elephants use computers? They're afraid of the mouse!\",\n",
+    "        \"penguins\": \"Why don't penguins like talking to strangers at parties? Because they find it hard to break the ice.\"\n",
+    "    }\n",
+    "    return {\"jokes\": [joke_map[state[\"subject\"]]]}\n",
+    "\n",
+    "def continue_to_jokes(state: OverallState):\n",
+    "    return [Send(\"generate_joke\", {\"subject\": s}) for s in state[\"subjects\"]]\n",
+    "\n",
+    "def best_joke(state: OverallState):\n",
+    "    return {\"best_selected_joke\": \"penguins\"}\n",
+    "\n",
+    "builder = StateGraph(OverallState)\n",
+    "builder.add_node(\"generate_topics\", generate_topics)\n",
+    "builder.add_node(\"generate_joke\", generate_joke)\n",
+    "builder.add_node(\"best_joke\", best_joke)\n",
+    "builder.add_edge(START, \"generate_topics\")\n",
+    "builder.add_conditional_edges(\"generate_topics\", continue_to_jokes, [\"generate_joke\"])\n",
+    "builder.add_edge(\"generate_joke\", \"best_joke\")\n",
+    "builder.add_edge(\"best_joke\", END)\n",
+    "graph = builder.compile()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "id": "83c4a808",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'generate_topics': {'subjects': ['lions', 'elephants', 'penguins']}}\n",
+      "{'generate_joke': {'jokes': [\"Why don't lions like fast food? Because they can't catch it!\"]}}\n",
+      "{'generate_joke': {'jokes': [\"Why don't elephants use computers? They're afraid of the mouse!\"]}}\n",
+      "{'generate_joke': {'jokes': [\"Why don't penguins like talking to strangers at parties? Because they find it hard to break the ice.\"]}}\n",
+      "{'best_joke': {'best_selected_joke': 'penguins'}}\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Call the graph: here we call it to generate a list of jokes\n",
+    "for step in graph.stream({\"topic\": \"animals\"}, stream_mode=\"updates\"):\n",
+    "    print(step)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "id": "8c226b38",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "{'topic': 'animals', 'jokes': []}\n",
+      "{'topic': 'animals', 'subjects': ['lions', 'elephants', 'penguins'], 'jokes': []}\n",
+      "{'topic': 'animals', 'subjects': ['lions', 'elephants', 'penguins'], 'jokes': [\"Why don't lions like fast food? Because they can't catch it!\", \"Why don't elephants use computers? They're afraid of the mouse!\", \"Why don't penguins like talking to strangers at parties? Because they find it hard to break the ice.\"]}\n",
+      "{'topic': 'animals', 'subjects': ['lions', 'elephants', 'penguins'], 'jokes': [\"Why don't lions like fast food? Because they can't catch it!\", \"Why don't elephants use computers? They're afraid of the mouse!\", \"Why don't penguins like talking to strangers at parties? Because they find it hard to break the ice.\"], 'best_selected_joke': 'penguins'}\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Call the graph: here we call it to generate a list of jokes\n",
+    "for step in graph.stream({\"topic\": \"animals\"}, stream_mode=\"values\"):\n",
+    "    print(step)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "id": "47f80f1f",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "{'topic': 'animals',\n",
+       " 'subjects': ['lions', 'elephants', 'penguins'],\n",
+       " 'jokes': [\"Why don't lions like fast food? Because they can't catch it!\",\n",
+       "  \"Why don't elephants use computers? They're afraid of the mouse!\",\n",
+       "  \"Why don't penguins like talking to strangers at parties? Because they find it hard to break the ice.\"],\n",
+       " 'best_selected_joke': 'penguins'}"
+      ]
+     },
+     "execution_count": 26,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "graph.invoke({\"topic\": \"animals\"})"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "0e73e0a4",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "c07f8d67",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "d9d71bef",
+   "metadata": {},
+   "source": [
+    "# Create and Control Loops"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "id": "09b88d14",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import operator\n",
+    "from typing import Annotated, Literal\n",
+    "from typing_extensions import TypedDict\n",
+    "from langgraph.graph import StateGraph, START, END\n",
+    "\n",
+    "class State(TypedDict):\n",
+    "    # The operator.add reducer fn makes this append-only\n",
+    "    aggregate: Annotated[list, operator.add]\n",
+    "\n",
+    "def a(state: State):\n",
+    "    print(f'Node A sees {state[\"aggregate\"]}')\n",
+    "    return {\"aggregate\": [\"A\"]}\n",
+    "\n",
+    "def b(state: State):\n",
+    "    print(f'Node B sees {state[\"aggregate\"]}')\n",
+    "    return {\"aggregate\": [\"B\"]}\n",
+    "\n",
+    "# Define nodes\n",
+    "builder = StateGraph(State)\n",
+    "builder.add_node(a)\n",
+    "builder.add_node(b)\n",
+    "\n",
+    "# Define edges\n",
+    "def route(state: State) -> Literal[\"b\", END]:\n",
+    "    if len(state[\"aggregate\"]) < 7:\n",
+    "        return \"b\"\n",
+    "    else:\n",
+    "        return END\n",
+    "\n",
+    "builder.add_edge(START, \"a\")\n",
+    "builder.add_conditional_edges(\"a\", route)\n",
+    "builder.add_edge(\"b\", \"a\")\n",
+    "graph = builder.compile()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "3773c2d5",
+   "metadata": {},
+   "source": [
+    "This architecture is similar to a ReAct agent in which node `\"a\"` is a tool-calling model, and node `\"b\"` represents the tools."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "id": "05d7b675",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Node A sees []\n",
+      "Node B sees ['A']\n",
+      "Node A sees ['A', 'B']\n",
+      "Node B sees ['A', 'B', 'A']\n",
+      "Node A sees ['A', 'B', 'A', 'B']\n",
+      "Node B sees ['A', 'B', 'A', 'B', 'A']\n",
+      "Node A sees ['A', 'B', 'A', 'B', 'A', 'B']\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "{'aggregate': ['A', 'B', 'A', 'B', 'A', 'B', 'A']}"
+      ]
+     },
+     "execution_count": 30,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "graph.invoke({\"aggregate\": []})"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "804f14f3",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "c742392d",
+   "metadata": {},
+   "source": [
+    "## Impose a recursion limit"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "id": "b588a0fd",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Node A sees []\n",
+      "Node B sees ['A']\n",
+      "Node A sees ['A', 'B']\n",
+      "Node B sees ['A', 'B', 'A']\n",
+      "Recursion Error\n"
+     ]
+    }
+   ],
+   "source": [
+    "from langgraph.errors import GraphRecursionError\n",
+    "\n",
+    "try:\n",
+    "    graph.invoke({\"aggregate\": []}, {\"recursion_limit\": 4})\n",
+    "except GraphRecursionError:\n",
+    "    print(\"Recursion Error\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "c1e4b468",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "9c226407",
+   "metadata": {},
+   "source": [
+    "# Async"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "a8d80ce9",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "02a0d9a2",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "38c04788",
+   "metadata": {},
+   "source": [
+    "# Combine Control Flow and State Updates with Command"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 36,
+   "id": "76dc579d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import random\n",
+    "from typing_extensions import TypedDict, Literal\n",
+    "from langgraph.graph import StateGraph, START\n",
+    "from langgraph.types import Command\n",
+    "\n",
+    "# Define graph state\n",
+    "class State(TypedDict):\n",
+    "    foo: str\n",
+    "\n",
+    "# Define the nodes\n",
+    "\n",
+    "def node_a(state: State) -> Command[Literal[\"node_b\", \"node_c\"]]:\n",
+    "    print(\"Called A\")\n",
+    "    value = random.choice([\"b\", \"c\"])\n",
+    "    # this is a replacement for a conditional edge function\n",
+    "    if value == \"b\":\n",
+    "        goto = \"node_b\"\n",
+    "    else:\n",
+    "        goto = \"node_c\"\n",
+    "\n",
+    "    # note how Command allows you to BOTH update the graph state AND route to the next node\n",
+    "    return Command(\n",
+    "        # this is the state update\n",
+    "        update={\"foo\": value},\n",
+    "        # this is a replacement for an edge\n",
+    "        goto=goto,\n",
+    "    )\n",
+    "\n",
+    "def node_b(state: State):\n",
+    "    print(\"Called B\")\n",
+    "    return {\"foo\": state[\"foo\"] + \"b\"}\n",
+    "\n",
+    "def node_c(state: State):\n",
+    "    print(\"Called C\")\n",
+    "    return {\"foo\": state[\"foo\"] + \"c\"}"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 37,
+   "id": "b93628f9",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "builder = StateGraph(State)\n",
+    "builder.add_edge(START, \"node_a\")\n",
+    "builder.add_node(node_a)\n",
+    "builder.add_node(node_b)\n",
+    "builder.add_node(node_c)\n",
+    "# NOTE: there are no edges between nodes A, B and C!\n",
+    "\n",
+    "graph = builder.compile()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "27319ed0",
+   "metadata": {},
+   "source": [
+    "You might have noticed that we used `Command` as a return type annotation, e.g. `Command[Literal[\"node_b\", \"node_c\"]]`. This is necessary for the graph rendering and tells LangGraph that `node_a` can navigate to `node_b` and `node_c`."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 43,
+   "id": "0e295e27",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Called A\n",
+      "Called C\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "{'foo': 'cc'}"
+      ]
+     },
+     "execution_count": 43,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "graph.invoke({\"foo\": \"\"})"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "fa604b43",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "85d3ec81",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "bdd76548",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "cb09db8a",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "2700b7e6",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": ".venv",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.15"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
